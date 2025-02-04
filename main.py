@@ -96,7 +96,17 @@ async def on_ready():
     except Exception as e:
         print(f"スラッシュコマンドの同期中にエラー: {e}")
     print(f"ログインしました: {bot.user}")
-    update_private_vc_name.start()  # タスクを開始
+    update_private_vc_name.start()  # 
+
+@bot.event
+async def on_interaction(interaction: discord.Interaction):
+    """DM でのスラッシュコマンド実行を禁止"""
+    if interaction.guild is None:
+        await interaction.response.send_message("このコマンドはDMでは使用できません。", ephemeral=True)
+        return
+
+    # スラッシュコマンドの処理
+    await bot.process_application_commands(interaction)
 
 @tasks.loop(minutes=2)
 async def update_private_vc_name():
