@@ -295,6 +295,9 @@ class PaginatedSelectView(View):
 @bot.tree.command(name="reset_all_tickets", description="このサーバーの全メンバーのチケットをリセットします（管理者限定）")
 @app_commands.default_permissions(administrator=True)  # 管理者のみ実行可能
 async def reset_all_tickets(interaction: discord.Interaction):
+    if interaction.guild is None:
+        await interaction.response.send_message("このコマンドはサーバー内でのみ使用できます。", ephemeral=True)
+        return
     guild_id = interaction.guild.id  # コマンドが実行されたサーバーのIDを取得
 
     with db_connect() as conn:
@@ -306,6 +309,9 @@ async def reset_all_tickets(interaction: discord.Interaction):
 
 @bot.tree.command(name="setup", description="プライベートVC作成パネルを設定します。")
 async def setup(interaction: discord.Interaction):
+    if interaction.guild is None:
+        await interaction.response.send_message("このコマンドはサーバー内でのみ使用できます。", ephemeral=True)
+        return
     guild = interaction.guild
     categories = guild.categories
     if not categories:
@@ -351,6 +357,9 @@ async def setup(interaction: discord.Interaction):
 # VC参加処理の修正
 @bot.tree.command(name="vc", description="プライベートVCに参加します。")
 async def vc(interaction: discord.Interaction, passcode: str):
+    if interaction.guild is None:
+        await interaction.response.send_message("このコマンドはサーバー内でのみ使用できます。", ephemeral=True)
+        return
     guild = interaction.guild
     if guild.id in active_vcs and passcode in active_vcs[guild.id]:
         vc_info = active_vcs[guild.id][passcode]
@@ -429,6 +438,9 @@ class CategorySelectView(discord.ui.View):
 # コマンド本体
 @bot.tree.command(name="setup_monitor", description="プライベートVC監視カテゴリを設定します。")
 async def setup_monitor(interaction: discord.Interaction):
+    if interaction.guild is None:
+        await interaction.response.send_message("このコマンドはサーバー内でのみ使用できます。", ephemeral=True)
+        return
     guild = interaction.guild
     categories = guild.categories
 
@@ -445,6 +457,9 @@ async def setup_monitor(interaction: discord.Interaction):
 @bot.tree.command(name="give_all_tickets", description="サーバーの全員に1チケットを付与します。")
 @commands.has_permissions(administrator=True)
 async def give_all_tickets(interaction: discord.Interaction):
+    if interaction.guild is None:
+        await interaction.response.send_message("このコマンドはサーバー内でのみ使用できます。", ephemeral=True)
+        return
     try:
         guild_id = interaction.guild.id
         for member in interaction.guild.members:
@@ -459,6 +474,9 @@ async def give_all_tickets(interaction: discord.Interaction):
 # 2. 自分のチケットと招待人数確認
 @bot.tree.command(name="my_info", description="自分のチケットと招待人数を確認します。")
 async def my_info(interaction: discord.Interaction):
+    if interaction.guild is None:
+        await interaction.response.send_message("このコマンドはサーバー内でのみ使用できます。", ephemeral=True)
+        return
     user = interaction.user
     guild_id = interaction.guild.id
     tickets = get_tickets(guild_id, user.id)
@@ -469,6 +487,9 @@ async def my_info(interaction: discord.Interaction):
 # 3. メンバーを指定してチケットと招待人数確認
 @bot.tree.command(name="check_member_info", description="指定したメンバーのチケットと招待人数を確認します。")
 async def check_member_info(interaction: discord.Interaction, member: discord.Member):
+    if interaction.guild is None:
+        await interaction.response.send_message("このコマンドはサーバー内でのみ使用できます。", ephemeral=True)
+        return
     guild_id = interaction.guild.id
     tickets = get_tickets(guild_id, member.id)
     invites = get_invitations(guild_id, member.id)
@@ -479,6 +500,9 @@ async def check_member_info(interaction: discord.Interaction, member: discord.Me
 @bot.tree.command(name="set_member_tickets", description="指定したメンバーのチケット数を変更します。")
 @commands.has_permissions(administrator=True)
 async def set_member_tickets(interaction: discord.Interaction, member: discord.Member, tickets: int):
+    if interaction.guild is None:
+        await interaction.response.send_message("このコマンドはサーバー内でのみ使用できます。", ephemeral=True)
+        return
     try:
         guild_id = interaction.guild.id
         set_tickets(guild_id, member.id, tickets)
