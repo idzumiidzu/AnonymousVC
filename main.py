@@ -110,21 +110,31 @@ async def update_private_vc_name():
     for guild in bot.guilds:
         private_vc_channel_id = monitor_vc_category.get(guild.id)
 
-        # プライベートVCのカテゴリが存在するか確認
-        if private_vc_channel_id:
-            private_vc_channel = discord.utils.get(guild.voice_channels, id=private_vc_channel_id)
-            if private_vc_channel:
-                # VCカテゴリ内で名前が"VC-"で始まるチャンネル数をカウント
-                private_vc_count = len([vc for vc in private_vc_channel.category.voice_channels if vc.name.startswith("VC-")])
-                new_name = f"非公開VCカウント: {private_vc_count}"
+        # カテゴリが存在しない場合はスキップ
+        if not private_vc_channel_id:
+            continue  # 次の guild へ
 
-                # 名前を変更（変更が必要な場合のみ）
-                if private_vc_channel.name != new_name:
-                    try:
-                        await private_vc_channel.edit(name=new_name)
-                        print(f"{guild.name} のプライベートVC名を更新しました: {new_name}")
-                    except discord.errors.HTTPException:
-                        print("VC名の変更時にエラーが発生しましたが、スキップします。")
+        private_vc_channel = discord.utils.get(guild.voice_channels, id=private_vc_channel_id)
+
+        # チャンネルが見つからない場合はスキップ
+        if not private_vc_channel or not private_vc_channel.category:
+            continue  # 次の guild へ
+
+        # VCカテゴリ内で名前が"VC-"で始まるチャンネル数をカウント
+        private_vc_count = len([vc for vc in private_vc_channel.category.voice_channels if vc.name.startswith("VC-")])
+        new_name = f"非公開VCカウント:{private_vc_count}"
+
+        # 既に同じ名前ならスキップ
+        if private_vc_channel.name == new_name:
+            continue  # 次の guild へ
+
+        try:
+            await private_vc_channel.edit(name=new_name)
+            print(f"{guild.name} のプライベートVC名を更新しました: {new_name}")
+        except discord.errors.HTTPException:
+            print("VC名の変更時にエラーが発生しましたが、スキップします。")
+            continue  # エラーが発生しても次の guild へ
+
 
 
 # サーバーごとにチケットや招待人数を管理するための関数
@@ -166,6 +176,12 @@ class PasscodeModal(Modal):
         passcode = self.passcode.value
         guild = interaction.guild
 
+        if guild is None:  # 通常は起こらないが、万が一のためチェック
+            await interaction.response.send_message(
+                "予期しないエラーが発生しました。もう一度お試しください。", ephemeral=True
+            )
+            return
+
         # 入力されたパスコードを処理
         if guild.id in active_vcs and passcode in active_vcs[guild.id]:
             vc_info = active_vcs[guild.id][passcode]
@@ -182,6 +198,7 @@ class PasscodeModal(Modal):
             await interaction.response.send_message(
                 "無効なパスコードです。再確認してください。", ephemeral=True
             )
+
 
 
 class PrivateVCPanel(View):
@@ -203,12 +220,19 @@ class PrivateVCPanel(View):
 
     async def create_vc_callback(self, interaction: discord.Interaction):
         user = interaction.user
-        guild_id = interaction.guild.id
         guild = interaction.guild
-        tickets = get_tickets(guild_id,user.id)
+        guild_id = interaction.guild_id  # より安全な取得方法
+
+        if guild is None:
+            await interaction.response.send_message(
+                "予期しないエラーが発生しました。もう一度お試しください。", ephemeral=True
+            )
+            return
+
+        tickets = get_tickets(guild_id, user.id)
 
         if tickets > 0:
-            set_tickets(guild_id,user.id, tickets - 1)
+            set_tickets(guild_id, user.id, tickets - 1)
             passcode = generate_passcode()
             overwrites = {
                 guild.default_role: discord.PermissionOverwrite(view_channel=False, connect=False),
@@ -231,7 +255,7 @@ class PrivateVCPanel(View):
             }
 
             await interaction.response.send_message(
-                f"プライベートVCが作成されました！\nパスコード: `{passcode}`\n{vc.mention} に参加できます。\n残りチケット数: {get_tickets(guild_id,user.id)}枚",
+                f"プライベートVCが作成されました！\nパスコード: `{passcode}`\n{vc.mention} に参加できます。\n残りチケット数: {get_tickets(guild_id, user.id)}枚",
                 ephemeral=True
             )
         else:
@@ -242,10 +266,19 @@ class PrivateVCPanel(View):
 
     async def check_tickets_callback(self, interaction: discord.Interaction):
         user = interaction.user
-        guild_id = interaction.guild.id
+        guild = interaction.guild
+        guild_id = interaction.guild_id  # より安全な取得方法
+
+        if guild is None:
+            await interaction.response.send_message(
+                "予期しないエラーが発生しました。もう一度お試しください。", ephemeral=True
+            )
+            return
+
         await interaction.response.send_message(
-            f"あなたの現在のチケット数: {get_tickets(guild_id,user.id)}枚", ephemeral=True
+            f"あなたの現在のチケット数: {get_tickets(guild_id, user.id)}枚", ephemeral=True
         )
+
 
 
 class PaginatedSelectView(View):
@@ -253,6 +286,7 @@ class PaginatedSelectView(View):
         super().__init__()
         self.channels = channels
         self.author = author  # インタラクションを行ったユーザーを設定
+        self.message = None
 
         # チャンネルを選択するプルダウンメニュー
         self.channel_select = Select(
@@ -269,28 +303,62 @@ class PaginatedSelectView(View):
         return True
 
     async def on_channel_selected(self, interaction):
-        # チャンネルが選択された際にパネルを設置
-        selected_channel = discord.utils.get(self.channels, id=int(self.channel_select.values[0]))
-        if selected_channel:
-            panel_message = await selected_channel.send(
-                content="### 以下のボタンを使用してください",
-                view=PrivateVCPanel(selected_channel.category)  # ここでVCパネルを設置する
-            )
+        try:
+            # チャンネルが選択された際にパネルを設置
+            selected_channel_id = int(self.channel_select.values[0])
 
-            # ユーザーにパネルが設置されたことを通知
+            # channels をループで確認し、selected_channel を見つける
+            selected_channel = next((channel for channel in self.channels if channel.id == selected_channel_id), None)
+
+            if selected_channel:
+                # selected_channel.category を確認してから渡す
+                if selected_channel.category:
+                    # selected_channel.category を引数として渡す
+                    await selected_channel.send(
+                        content="### 以下のボタンを使用してください",
+                        view=PrivateVCPanel(selected_channel.category)  # category を渡す
+                    )
+
+                    # ユーザーにパネルが設置されたことを通知
+                    await interaction.response.send_message(
+                        f"チャンネル「{selected_channel.name}」にパネルを設置しました！",
+                        ephemeral=True
+                    )
+                else:
+                    # category が None の場合の処理
+                    await interaction.response.send_message(
+                        f"チャンネル「{selected_channel.name}」にはカテゴリが設定されていません。",
+                        ephemeral=True
+                    )
+            else:
+                # selected_channel が None の場合
+                await interaction.response.send_message(
+                    "指定されたチャンネルが見つかりませんでした。", ephemeral=True
+                )
+
+        except Exception as e:
+            # その他の予期しないエラーをキャッチ
             await interaction.response.send_message(
-                f"チャンネル「{selected_channel.name}」にパネルを設置しました！",
-                ephemeral=True
+                f"予期しないエラーが発生しました: {str(e)}", ephemeral=True
             )
-        else:
-            await interaction.response.send_message("チャンネルの選択に失敗しました。", ephemeral=True)
+            # エラーログを出力（開発者向け）
+            print(f"Error occurred: {e}")
 
     async def update_channels(self):
-        # チャンネルを選んでくださいメッセージを送信
-        await self.message.edit(
-            content="チャンネルを選んでください。",
-            view=self
-        )
+        if self.message:
+            # チャンネルを選んでくださいメッセージを送信
+            await self.message.edit(
+                content="チャンネルを選んでください。",
+                view=self
+            )
+        else:
+            # self.message が None の場合、最初にメッセージを送信
+            self.message = await self.author.send(
+                content="チャンネルを選んでください。",
+                view=self
+            )
+
+
 
 @bot.tree.command(name="reset_all_tickets", description="このサーバーの全メンバーのチケットをリセットします（管理者限定）")
 @app_commands.default_permissions(administrator=True)  # 管理者のみ実行可能
@@ -309,11 +377,15 @@ async def reset_all_tickets(interaction: discord.Interaction):
 
 @bot.tree.command(name="setup", description="プライベートVC作成パネルを設定します。")
 async def setup(interaction: discord.Interaction):
+    # サーバー外でコマンドが実行されていないか確認
     if interaction.guild is None:
         await interaction.response.send_message("このコマンドはサーバー内でのみ使用できます。", ephemeral=True)
         return
+
     guild = interaction.guild
-    categories = guild.categories
+
+    # guild.categories が None でないことを確認
+    categories = [category for category in guild.categories]  # categories をリストとして取得
     if not categories:
         await interaction.response.send_message("カテゴリが見つかりません。", ephemeral=True)
         return
@@ -328,13 +400,18 @@ async def setup(interaction: discord.Interaction):
             guild = interaction.guild
             selected_category = discord.utils.get(guild.categories, id=int(self.values[0]))
 
-            # カテゴリ内のチャンネルをリスト化
+            # カテゴリが選ばれなかった場合のエラーチェック
+            if selected_category is None:
+                await interaction.response.send_message("カテゴリが選ばれませんでした。", ephemeral=True)
+                return
+
+            # カテゴリ内のテキストチャンネルをリスト化
             channels = selected_category.text_channels
             if not channels:
                 await interaction.response.send_message("このカテゴリにチャンネルが見つかりません。", ephemeral=True)
                 return
 
-            # PaginatedSelectViewのインスタンス化時に、authorを渡す
+            # チャンネル選択用のビューを作成
             channel_view = PaginatedSelectView(channels, author=interaction.user)
             await interaction.response.send_message(
                 content="パネルを設置するチャンネルを選んでください",
@@ -342,16 +419,16 @@ async def setup(interaction: discord.Interaction):
                 ephemeral=True  # 自分にしか見えないメッセージ
             )
 
-
-    category_view = View()
+    # カテゴリ選択のビューを作成
+    category_view = discord.ui.View()
     category_view.add_item(CategorySelect())
 
+    # カテゴリ選択メッセージを送信
     await interaction.response.send_message(
         content="VCが作成されるカテゴリを選んでください",
         view=category_view,
         ephemeral=True  # 自分にしか見えないメッセージ
     )
-
 
 
 # VC参加処理の修正
@@ -404,30 +481,66 @@ class CategorySelect(discord.ui.Select):
         super().__init__(placeholder="監視用のカテゴリを選択してください", options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.defer()  # インタラクションの遅延処理
+        try:
+            await interaction.response.defer()  # インタラクションの遅延処理
 
-        guild = interaction.guild
-        selected_category_id = int(self.values[0])
-        category = discord.utils.get(guild.categories, id=selected_category_id)
+            guild = interaction.guild
+            if guild is None:  # 通常は起こらないが、万が一のためチェック
+                await interaction.response.send_message(
+                    "予期しないエラーが発生しました。もう一度お試しください。", ephemeral=True
+                )
+                return
 
-        # 「非公開VCカウント： 数」のチャンネルを作成
-        private_vc_channel = next(filter(lambda vc: "非公開VCカウント：" in vc.name, category.channels), None)
-        if not private_vc_channel:
-            private_vc_channel = await category.create_voice_channel(
-                name="非公開VCカウント： 0",
-                overwrites={guild.default_role: discord.PermissionOverwrite(connect=False)},
+            selected_category_id = int(self.values[0])
+            category = discord.utils.get(guild.categories, id=selected_category_id)
+
+            if not category:
+                # カテゴリが見つからない場合のエラーハンドリング
+                await interaction.followup.send(
+                    "選択されたカテゴリが存在しません。", ephemeral=True
+                )
+                return
+
+            # 「非公開VCカウント： 数」のチャンネルを作成
+            private_vc_channel = next(
+                filter(lambda vc: "非公開VCカウント:" in vc.name, category.channels), None
             )
 
-        # チャンネルIDを保存（サーバーごとに保存するなら辞書などを利用）
-        monitor_vc_category[guild.id] = private_vc_channel.id
+            if not private_vc_channel:
+                # チャンネルが存在しない場合、新しく作成
+                private_vc_channel = await category.create_voice_channel(
+                    name="非公開VCカウント:0",
+                    overwrites={guild.default_role: discord.PermissionOverwrite(connect=False)},
+                )
 
-        # 作成された「非公開VCカウント： 数」の名前を更新
-        private_vc_count = len([vc for vc in category.voice_channels if vc.name.startswith("VC-")])
-        await private_vc_channel.edit(name=f"非公開VCカウント： {private_vc_count}")
+            # チャンネルIDを保存（サーバーごとに保存するなら辞書などを利用）
+            monitor_vc_category[guild.id] = private_vc_channel.id
 
-        await interaction.followup.send(
-            f"監視用のカテゴリを「{category.name}」に設定しました。", ephemeral=True
-        )
+            # 作成された「非公開VCカウント:数」の名前を更新
+            private_vc_count = len([vc for vc in category.voice_channels if vc.name.startswith("VC-")])
+            await private_vc_channel.edit(name=f"非公開VCカウント:{private_vc_count}")
+
+            await interaction.followup.send(
+                f"監視用のカテゴリを「{category.name}」に設定しました。", ephemeral=True
+            )
+
+        except discord.DiscordException as e:
+            # Discordのエラーに関するエラーハンドリング
+            await interaction.followup.send(
+                f"Discordのエラーが発生しました: {str(e)}", ephemeral=True
+            )
+            # エラーログを出力（開発者向け）
+            print(f"DiscordError: {e}")
+
+        except Exception as e:
+            # その他の予期しないエラーをキャッチ
+            await interaction.followup.send(
+                f"予期しないエラーが発生しました: {str(e)}", ephemeral=True
+            )
+            # エラーログを出力（開発者向け）
+            print(f"Unexpected error: {e}")
+
+
 
 # カスタムViewクラス
 class CategorySelectView(discord.ui.View):
