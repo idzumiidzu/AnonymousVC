@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands, tasks
 from discord.ui import Button, View, Modal, TextInput, Select
 from discord.utils import get
+from discord import app_commands
 import random
 import os
 import sqlite3
@@ -284,6 +285,17 @@ class PaginatedSelectView(View):
             view=self
         )
 
+@bot.tree.command(name="reset_all_tickets", description="このサーバーの全メンバーのチケットをリセットします（管理者限定）")
+@app_commands.default_permissions(administrator=True)  # 管理者のみ実行可能
+async def reset_all_tickets(interaction: discord.Interaction):
+    guild_id = interaction.guild.id  # コマンドが実行されたサーバーのIDを取得
+
+    with db_connect() as conn:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE tickets SET tickets = 0 WHERE guild_id = ?", (guild_id,))
+        conn.commit()
+
+    await interaction.response.send_message("このサーバーの全メンバーのチケットをリセットしました。", ephemeral=True)  # 管理者のみが見えるように
 
 @bot.tree.command(name="setup", description="プライベートVC作成パネルを設定します。")
 async def setup(interaction: discord.Interaction):
