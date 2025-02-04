@@ -108,7 +108,7 @@ async def update_private_vc_name():
             if private_vc_channel:
                 # VCカテゴリ内で名前が"VC-"で始まるチャンネル数をカウント
                 private_vc_count = len([vc for vc in private_vc_channel.category.voice_channels if vc.name.startswith("VC-")])
-                new_name = f"プライベートVC: {private_vc_count}"
+                new_name = f"非公開VCカウント: {private_vc_count}"
 
                 # 名前を変更（変更が必要な場合のみ）
                 if private_vc_channel.name != new_name:
@@ -382,20 +382,20 @@ class CategorySelect(discord.ui.Select):
         selected_category_id = int(self.values[0])
         category = discord.utils.get(guild.categories, id=selected_category_id)
 
-        # 「プライベートVC: 数」のチャンネルを作成
-        private_vc_channel = discord.utils.get(category.channels, name="プライベートVC: 数")
+        # 「非公開VCカウント： 数」のチャンネルを作成
+        private_vc_channel = next(filter(lambda vc: "非公開VCカウント：" in vc.name, category.channels), None)
         if not private_vc_channel:
             private_vc_channel = await category.create_voice_channel(
-                name="プライベートVC: 0",
+                name="非公開VCカウント： 0",
                 overwrites={guild.default_role: discord.PermissionOverwrite(connect=False)},
             )
 
         # チャンネルIDを保存（サーバーごとに保存するなら辞書などを利用）
         monitor_vc_category[guild.id] = private_vc_channel.id
 
-        # 作成された「プライベートVC: 数」の名前を更新
+        # 作成された「非公開VCカウント： 数」の名前を更新
         private_vc_count = len([vc for vc in category.voice_channels if vc.name.startswith("VC-")])
-        await private_vc_channel.edit(name=f"プライベートVC: {private_vc_count}")
+        await private_vc_channel.edit(name=f"非公開VCカウント： {private_vc_count}")
 
         await interaction.followup.send(
             f"監視用のカテゴリを「{category.name}」に設定しました。", ephemeral=True
