@@ -15,8 +15,7 @@ intents.members = True  # メンバー関連のイベントを監視
 intents.guilds = True   # ギルドの情報を監視
 intents.message_content = True  # メッセージコンテンツ関連のイベント
 
-bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
-
+bot = commands.Bot(command_prefix="/", intents=intents)
 
 # データベース接続
 def db_connect():
@@ -105,8 +104,6 @@ async def on_interaction(interaction: discord.Interaction):
     if interaction.guild is None:
         await interaction.response.send_message("このコマンドはDMでは使用できません。", ephemeral=True)
         return
-    # スラッシュコマンドの処理
-    await bot.tree.process_interaction(interaction)
 
 @tasks.loop(minutes=2)
 async def update_private_vc_name():
