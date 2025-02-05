@@ -15,7 +15,8 @@ intents.members = True  # メンバー関連のイベントを監視
 intents.guilds = True   # ギルドの情報を監視
 intents.message_content = True  # メッセージコンテンツ関連のイベント
 
-bot = commands.Bot(command_prefix="/", intents=intents)
+bot = commands.AutoShardedBot(command_prefix="!", intents=intents)  # シャードを自動設定
+
 
 # データベース接続
 def db_connect():
