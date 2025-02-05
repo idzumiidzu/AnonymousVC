@@ -98,12 +98,6 @@ async def on_ready():
     print(f"ログインしました: {bot.user}")
     update_private_vc_name.start()  # 
 
-@bot.event
-async def on_interaction(interaction: discord.Interaction):
-    """DM でのスラッシュコマンド実行を禁止"""
-    if interaction.guild is None:
-        await interaction.response.send_message("このコマンドはDMでは使用できません。", ephemeral=True)
-        return
 
 @tasks.loop(minutes=2)
 async def update_private_vc_name():
