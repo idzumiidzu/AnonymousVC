@@ -91,13 +91,19 @@ monitor_vc_category = {}
 # イベント: ボットがオンラインになったとき
 @bot.event
 async def on_ready():
+    print(f"ログインしました: {bot.user}")
+
+    # タスクがすでに実行中でない場合のみ開始
+    if not update_private_vc_name.is_running():
+        update_private_vc_name.start()
+
+@bot.event
+async def setup_hook():
     try:
         synced = await bot.tree.sync()
         print(f"スラッシュコマンドが同期されました：{len(synced)}個のコマンド")
     except Exception as e:
         print(f"スラッシュコマンドの同期中にエラー: {e}")
-    print(f"ログインしました: {bot.user}")
-    update_private_vc_name.start()  # 
 
 
 @tasks.loop(minutes=2)
