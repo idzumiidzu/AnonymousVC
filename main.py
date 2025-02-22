@@ -209,15 +209,15 @@ class PrivateVCPanel(View):
 
         self.create_vc_button = Button(label="プライベートVCを作成", style=discord.ButtonStyle.green)
         self.access_vc_button = Button(label="パスコードを入力して参加", style=discord.ButtonStyle.green)
-        self.check_tickets_button = Button(label="チケット数を確認", style=discord.ButtonStyle.blurple)
+
 
         self.create_vc_button.callback = self.create_vc_callback
         self.access_vc_button.callback = self.access_vc_callback
-        self.check_tickets_button.callback = self.check_tickets_callback
+
 
         self.add_item(self.create_vc_button)
         self.add_item(self.access_vc_button)
-        self.add_item(self.check_tickets_button)
+
 
     async def create_vc_callback(self, interaction: discord.Interaction):
         user = interaction.user
@@ -230,10 +230,10 @@ class PrivateVCPanel(View):
             )
             return
 
-        tickets = get_tickets(guild_id, user.id)
+        tickets = 1
 
         if tickets > 0:
-            set_tickets(guild_id, user.id, tickets - 1)
+
             passcode = generate_passcode()
             overwrites = {
                 guild.default_role: discord.PermissionOverwrite(view_channel=False, connect=False),
@@ -256,7 +256,7 @@ class PrivateVCPanel(View):
             }
 
             await interaction.response.send_message(
-                f"プライベートVCが作成されました！\nパスコード: `{passcode}`\n{vc.mention} に参加できます。\n残りチケット数: {get_tickets(guild_id, user.id)}枚",
+                f"プライベートVCが作成されました！\nパスコード: `{passcode}`\n{vc.mention} に参加できます。",
                 ephemeral=True
             )
         else:
